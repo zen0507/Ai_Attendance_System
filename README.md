@@ -1,0 +1,72 @@
+# EduTrack AI - Advanced Academic Monitoring System
+
+## Overview
+EduTrack AI is a comprehensive MERN stack application designed to monitor user activity, student attendance, and academic performance. It features role-based access for Admins, Teachers, and Students, along with detailed analytics and AI-driven risk analysis.
+
+## Features
+
+### 1. Architecture & Security
+- **JWT Authentication**: Secure stateless authentication with role-based middleware.
+- **Security Headers**: Implemented using `helmet` and `cors` for production readiness.
+- **Audit Trails**: Detailed `ActivityLog` stored in MongoDB for all critical actions.
+- **Service Layer**: Business logic extracted into `services/` for maintainability.
+
+### 2. Admin Dashboard
+- **Real-time Activity Feed**: Monitors system usage and user actions.
+- **System Health**: Visualizes CPU/Memory usage (mock data) and academic health.
+- **User Management**: Rapidly create and manage Users, Subjects, and assignments.
+
+### 3. Teacher Dashboard
+- **Attendance Management**: Mark attendance for batches/subjects.
+- **Marks Entry**: Upload marks for tests and assignments.
+- **Analytics**: View attendance trends and student risk profile.
+
+### 4. Student Dashboard
+- **Performance Tracking**: Visual progress bars for attendance and marks.
+- **AI Risk Analysis**: Machine Learning model (heuristic) calculates "Risk Probability" based on attendance < 75% and low marks.
+- **Comparative Charts**: Compare personal performance against class averages.
+
+## Tech Stack
+- **Frontend**: React, Vite, TailwindCSS, DaisyUI, Chart.js, Framer Motion (for transitions).
+- **Backend**: Node.js, Express, MongoDB, Mongoose.
+- **Tools**: Axios, Lucide-React, React-Router-DOM.
+
+## Setup & Installation
+
+1.  **Clone the Repository**
+    ```bash
+    git clone <repo-url>
+    cd EduTrackAI
+    ```
+
+2.  **Backend Setup**
+    ```bash
+    cd backend
+    npm install
+    # Create .env file with PORT, MONGO_URI, JWT_SECRET
+    npm run dev
+    ```
+
+3.  **Frontend Setup**
+    ```bash
+    cd frontend
+    npm install
+    npm run dev
+    ```
+
+## Project Structure
+- `backend/controllers`: Request handlers.
+- `backend/services`: Business logic (User, Attendance, Marks).
+- `backend/models`: Mongoose schemas.
+- `frontend/src/pages`: Main dashboard views.
+- `frontend/src/components`: Reusable UI components.
+- `frontend/src/context`: React Context for global state (Auth, Toast).
+
+## AI Risk Model
+The system uses a weighted algorithm to calculate student risk:
+- **Attendance < 75%**: High risk factor.
+- **Marks < 40% (Fail)**: High risk factor.
+- **Combination**: Calculates a probability score (0-1) and assigns a label (Safe, Moderate, High, Critical).
+
+## License
+MIT
