@@ -33,26 +33,41 @@ EduTrack AI is a comprehensive MERN stack application designed to monitor user a
 
 ## Setup & Installation
 
-1.  **Clone the Repository**
-    ```bash
-    git clone <repo-url>
-    cd EduTrackAI
-    ```
+Follow these steps to set up the project on a new system.
 
-2.  **Backend Setup**
-    ```bash
-    cd backend
-    npm install
-    # Create .env file with PORT, MONGO_URI, JWT_SECRET
-    npm run dev
-    ```
+### Prerequisites (Install these first)
+1.  **Node.js** (v18 or higher): [Download Here](https://nodejs.org/)
+2.  **MongoDB** (Community Server): [Download Here](https://www.mongodb.com/try/download/community)
+    *   Make sure MongoDB is running locally on port `27017` (default).
 
-3.  **Frontend Setup**
-    ```bash
-    cd frontend
-    npm install
-    npm run dev
-    ```
+### Installation Steps
+
+### Installation & Running
+
+#### Option 1: The Easy Way (Windows Only)
+1.  **Unzip** the folder.
+2.  Double-click `start_app.bat`.
+    *   This script will automatically install all dependencies and start both the backend and frontend servers for you.
+
+#### Option 2: Manual Setup
+If you prefer to run commands manually or are on Mac/Linux:
+
+**1. Backend Setup**
+```bash
+cd backend
+npm install
+# Ensure .env exists (it should be in the zip)
+npm start
+```
+
+**2. Frontend Setup**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The application should now be accessible at `http://localhost:5173`.
 
 ## Project Structure
 - `backend/controllers`: Request handlers.
