@@ -75,7 +75,7 @@ const markStudentAttendance = async (subjectId, date, students, teacherId = null
  * @param {string} studentId
  * @returns {Promise<Array>}
  */
-const getStudentAttendance = async (studentId) => {
+const getStudentAttendance = async (studentId, semester = null, batch = null) => {
     // Find records and populate session info
     const records = await AttendanceRecord.find({ studentId })
         .populate({
@@ -85,14 +85,22 @@ const getStudentAttendance = async (studentId) => {
         .sort({ createdAt: -1 })
         .lean();
 
-    // Flatten structure for frontend compatibility: { date, status, subjectName, ... }
+    // Flatten and filter structure for frontend compatibility
     return records.map(r => {
         if (!r.sessionId) return null; // Orphaned record
+
+        // Strict filtering
+        if (semester && r.sessionId.semester !== semester) return null;
+        if (batch && r.sessionId.batch !== batch) return null;
+
         return {
             _id: r._id,
             date: r.sessionId.date,
             status: r.status,
-            subjectId: r.sessionId.subjectId?._id,
+            subjectId: r.sessionId.subjectId ? {
+                _id: r.sessionId.subjectId._id,
+                name: r.sessionId.subjectId.name || 'Unknown'
+            } : null,
             subjectName: r.sessionId.subjectId?.name || 'Unknown',
             hours: r.sessionId.hoursConducted,
             type: r.sessionId.sessionType
@@ -105,7 +113,7 @@ const getStudentAttendance = async (studentId) => {
  * @param {string} studentId
  * @returns {Promise<Object>} - { percentage, totalClasses, presentClasses }
  */
-const calculateAttendancePercentage = async (studentId) => {
+const calculateAttendancePercentage = async (studentId, semester = null, batch = null) => {
     const records = await AttendanceRecord.find({ studentId }).populate('sessionId');
 
     let totalHours = 0;
@@ -113,6 +121,10 @@ const calculateAttendancePercentage = async (studentId) => {
 
     records.forEach(r => {
         if (r.sessionId) {
+            // Strict filtering
+            if (semester && r.sessionId.semester !== semester) return;
+            if (batch && r.sessionId.batch !== batch) return;
+
             const hours = r.sessionId.hoursConducted || 1;
             totalHours += hours;
             if (r.status === 'Present') {
@@ -121,12 +133,13 @@ const calculateAttendancePercentage = async (studentId) => {
         }
     });
 
-    const percentage = totalHours > 0 ? (presentHours / totalHours) * 100 : 0;
+    const percentage = totalHours > 0 ? (presentHours / totalHours) * 100 : null;
 
     return {
-        percentage: parseFloat(percentage.toFixed(2)),
-        totalClasses: totalHours, // Using hours as "classes" count for stats
-        presentClasses: presentHours
+        percentage: percentage !== null ? parseFloat(percentage.toFixed(2)) : null,
+        totalClasses: totalHours,
+        presentClasses: presentHours,
+        hasData: totalHours > 0
     };
 };
 

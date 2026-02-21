@@ -10,7 +10,7 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-const MAX_RAW = 120; // 50 + 50 + 20
+const MAX_RAW = 100; // 30 + 30 + 40
 
 const StudentPerformance = () => {
     const { user } = useContext(AuthContext);
@@ -72,10 +72,10 @@ const StudentPerformance = () => {
         scales: {
             y: {
                 beginAtZero: true,
-                max: 50,
+                max: 100,
                 grid: { color: 'rgba(75,85,99,0.15)' },
                 ticks: { color: '#9ca3af' },
-                title: { display: true, text: 'Weighted Score', color: '#9ca3af' }
+                title: { display: true, text: 'Score %', color: '#9ca3af' }
             },
             x: {
                 grid: { display: false },
@@ -102,17 +102,17 @@ const StudentPerformance = () => {
                 <div className="card bg-base-100 shadow-xl border border-base-200">
                     <div className="card-body text-center py-6">
                         <p className="text-xs font-bold uppercase opacity-50 mb-1">Overall Percentage</p>
-                        <p className={`text-4xl font-black ${overallRawPct >= 50 ? 'text-success' : 'text-error'}`}>
+                        <p className={`text-4xl font-black ${overallRawPct >= 40 ? 'text-success' : 'text-error'}`}>
                             {overallRawPct !== null ? `${overallRawPct}%` : '—'}
                         </p>
-                        <p className="text-xs opacity-40 mt-1">Raw: (T1+T2+Assign) / 120 × 100</p>
+                        <p className="text-xs opacity-40 mt-1">Raw: (T1+T2+Assign) / 100 × 100</p>
                     </div>
                 </div>
                 <div className="card bg-base-100 shadow-xl border border-base-200">
                     <div className="card-body text-center py-6">
                         <p className="text-xs font-bold uppercase opacity-50 mb-1">Subjects Passed</p>
                         <p className="text-4xl font-black text-primary">{passCount} / {marksData.length}</p>
-                        <p className="text-xs opacity-40 mt-1">Based on weighted pass threshold</p>
+                        <p className="text-xs opacity-40 mt-1">Based on global pass threshold</p>
                     </div>
                 </div>
                 <div className="card bg-base-100 shadow-xl border border-base-200">
@@ -161,9 +161,9 @@ const StudentPerformance = () => {
                                 <thead className="bg-base-200">
                                     <tr>
                                         <th>Subject</th>
-                                        <th className="text-center">Test 1 <span className="opacity-40 text-xs">/50</span></th>
-                                        <th className="text-center">Test 2 <span className="opacity-40 text-xs">/50</span></th>
-                                        <th className="text-center">Assignment <span className="opacity-40 text-xs">/20</span></th>
+                                        <th className="text-center">Test 1 <span className="opacity-40 text-xs">/30</span></th>
+                                        <th className="text-center">Test 2 <span className="opacity-40 text-xs">/30</span></th>
+                                        <th className="text-center">Assignment <span className="opacity-40 text-xs">/40</span></th>
                                         <th className="text-center">Total %</th>
                                         <th className="text-center">Class Avg</th>
                                         <th className="text-center">Status</th>
@@ -176,10 +176,10 @@ const StudentPerformance = () => {
                                             <td className="text-center">{m.test1}</td>
                                             <td className="text-center">{m.test2}</td>
                                             <td className="text-center">{m.assignment}</td>
-                                            <td className={`text-center font-bold ${m.rawPct >= 50 ? 'text-success' : 'text-error'}`}>
+                                            <td className={`text-center font-bold ${m.rawPct >= 40 ? 'text-success' : 'text-error'}`}>
                                                 {m.rawPct}%
                                                 <div className="text-xs opacity-40 font-normal">
-                                                    ({m.test1 + m.test2 + m.assignment}/120)
+                                                    ({m.test1 + m.test2 + m.assignment}/100)
                                                 </div>
                                             </td>
                                             <td className="text-center text-base-content/60">{m.classAvg}</td>

@@ -47,6 +47,10 @@ app.get('/', (req, res) => {
 const departmentRoutes = require('./routes/departmentRoutes');
 const activityRoutes = require('./routes/activityRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const teacherRoutes = require('./routes/teacherRoutes'); // Moved this import up
+const publicRoutes = require('./routes/publicRoutes'); // Moved this import up
+const hodRoutes = require('./routes/hodRoutes'); // New import
+const parentRoutes = require('./routes/parentRoutes'); // New import
 
 app.use('/api/users', userRoutes);
 app.use('/api/subjects', subjectRoutes);
@@ -55,12 +59,10 @@ app.use('/api/marks', marksRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/activity', activityRoutes);
 app.use('/api/admin', adminRoutes);
-
-const teacherRoutes = require('./routes/teacherRoutes');
 app.use('/api/teacher', teacherRoutes);
-
-const publicRoutes = require('./routes/publicRoutes');
 app.use('/api/public', publicRoutes);
+app.use('/api/hod', hodRoutes); // New route
+app.use('/api/parent', parentRoutes); // New route
 
 // Error Handling Middleware (Must be after routes)
 app.use(notFound);

@@ -9,15 +9,10 @@ const { getLogicSettings } = require('../utils/settingsHelper');
  * Add or update marks for a student in a subject.
  * Uses centralized weightage from settings — single calculation, no re-scaling.
  */
-const addOrUpdateMarks = async (studentId, subjectId, test1, test2, assignment) => {
-    const settings = await getLogicSettings();
-    const { weightage } = settings;
-
-    // Single calculation: Total = (T1 * W1) + (T2 * W2) + (A * W3)
-    const t1 = Number(test1) || 0;
-    const t2 = Number(test2) || 0;
-    const a = Number(assignment) || 0;
-    const total = (t1 * weightage.test1) + (t2 * weightage.test2) + (a * weightage.assignment);
+const addOrUpdateMarks = async (studentId, subjectId, test1, test2, assignment, semester, batch) => {
+    const t1 = Math.min(30, Math.max(0, Number(test1) || 0));
+    const t2 = Math.min(30, Math.max(0, Number(test2) || 0));
+    const a = Math.min(40, Math.max(0, Number(assignment) || 0));
 
     let marks = await Marks.findOne({ studentId, subjectId });
 
@@ -25,7 +20,9 @@ const addOrUpdateMarks = async (studentId, subjectId, test1, test2, assignment) 
         marks.test1 = t1;
         marks.test2 = t2;
         marks.assignment = a;
-        marks.total = parseFloat(total.toFixed(1));
+        marks.semester = semester || marks.semester;
+        marks.batch = batch || marks.batch;
+        // Total will be auto-calculated by pre-save hook
         await marks.save();
         return marks;
     } else {
@@ -35,7 +32,8 @@ const addOrUpdateMarks = async (studentId, subjectId, test1, test2, assignment) 
             test1: t1,
             test2: t2,
             assignment: a,
-            total: parseFloat(total.toFixed(1))
+            semester,
+            batch
         });
         return marks;
     }
@@ -50,17 +48,9 @@ const getStudentMarks = async (studentId) => {
         throw { status: 404, message: 'Marks not found' };
     }
 
-    // Recalculate totals using live settings to ensure consistency
-    const settings = await getLogicSettings();
-    const { weightage } = settings;
-
     return marks.map(m => ({
         ...m,
-        total: parseFloat(
-            ((Number(m.test1) || 0) * weightage.test1 +
-                (Number(m.test2) || 0) * weightage.test2 +
-                (Number(m.assignment) || 0) * weightage.assignment).toFixed(1)
-        )
+        total: parseFloat(((m.test1 || 0) + (m.test2 || 0) + (m.assignment || 0)).toFixed(1))
     }));
 };
 
@@ -87,34 +77,37 @@ const calculateStudentRisk = async (studentId) => {
         }
     });
 
-    const attendancePercentage = totalHours > 0 ? (presentHours / totalHours) * 100 : 0;
+    const attendancePercentage = totalHours > 0 ? (presentHours / totalHours) * 100 : null;
 
-    // 2. Fetch Marks (recalculate using live weightage)
+    // 2. Fetch Marks (sum of components)
     const allMarks = await Marks.find({ studentId }).lean();
     let avgMarks = 0;
     if (allMarks.length > 0) {
         const sumTotal = allMarks.reduce((acc, m) => {
-            const t1 = Number(m.test1) || 0;
-            const t2 = Number(m.test2) || 0;
-            const a = Number(m.assignment) || 0;
-            return acc + (t1 * weightage.test1) + (t2 * weightage.test2) + (a * weightage.assignment);
+            return acc + (Number(m.test1) || 0) + (Number(m.test2) || 0) + (Number(m.assignment) || 0);
         }, 0);
         avgMarks = sumTotal / allMarks.length;
     }
 
-    // 3. Risk Logic using settings thresholds
+    // 3. Risk Logic using settings thresholds (Standardized)
     let riskLevel = 'Low';
     let riskReasons = [];
 
-    if (attendancePercentage < minAttendance) {
+    if (attendancePercentage !== null && attendancePercentage < minAttendance) {
         riskReasons.push(`Low Attendance (${attendancePercentage.toFixed(1)}% < ${minAttendance}%)`);
     }
     if (avgMarks < passMarks && allMarks.length > 0) {
         riskReasons.push(`Failing Marks (Avg: ${avgMarks.toFixed(1)} < ${passMarks})`);
     }
 
-    if (riskReasons.length >= 2) riskLevel = 'Critical';
-    else if (riskReasons.length === 1) riskLevel = 'High';
+    // Dynamic Risk Level Mapping: >= 80: Low, 60-79: Medium, < 60: High
+    // Using a simple weighted formula for the student view (similar to analyticsService)
+    const effectiveAtt = attendancePercentage !== null ? attendancePercentage : 50;
+    const finalScore = (effectiveAtt * 0.5) + (avgMarks * 0.5);
+
+    if (finalScore < 60) riskLevel = 'High';
+    else if (finalScore < 80) riskLevel = 'Medium';
+    else riskLevel = 'Low';
 
     // ML probability (legacy support)
     const riskData = calculateRisk(attendancePercentage, avgMarks);
@@ -179,15 +172,12 @@ const getAcademicHealth = async () => {
  * Bulk update marks for multiple students.
  * Uses centralized settings for weightage — single calculation.
  */
-const bulkUpdateMarks = async (subjectId, marksData) => {
-    const settings = await getLogicSettings();
-    const { weightage } = settings;
-
+const bulkUpdateMarks = async (subjectId, marksData, semester, batch) => {
     const operations = marksData.map(mark => {
-        const t1 = Number(mark.test1 || 0);
-        const t2 = Number(mark.test2 || 0);
-        const a = Number(mark.assignment || 0);
-        const total = (t1 * weightage.test1) + (t2 * weightage.test2) + (a * weightage.assignment);
+        const t1 = Math.min(30, Math.max(0, Number(mark.test1) || 0));
+        const t2 = Math.min(30, Math.max(0, Number(mark.test2) || 0));
+        const a = Math.min(40, Math.max(0, Number(mark.assignment) || 0));
+        const total = Math.min(100, t1 + t2 + a);
 
         return {
             updateOne: {
@@ -197,7 +187,9 @@ const bulkUpdateMarks = async (subjectId, marksData) => {
                         test1: t1,
                         test2: t2,
                         assignment: a,
-                        total: parseFloat(total.toFixed(1))
+                        total,
+                        semester: semester || mark.semester,
+                        batch: batch || mark.batch
                     }
                 },
                 upsert: true
@@ -212,11 +204,11 @@ const bulkUpdateMarks = async (subjectId, marksData) => {
 
 /**
  * Get class average marks per subject for the subjects a student is enrolled in.
- * Returns per-subject: subjectName, studentTotal (weighted), classAvgTotal (weighted), rawTotals
+ * Returns per-subject: subjectName, studentTotal (raw), classAvgTotal (raw), rawTotals
  */
 const getClassAverageForStudent = async (studentId) => {
     const settings = await getLogicSettings();
-    const { weightage, passMarks } = settings;
+    const { passMarks } = settings;
 
     // Get all marks for this student
     const studentMarks = await Marks.find({ studentId }).populate('subjectId').lean();
@@ -231,29 +223,27 @@ const getClassAverageForStudent = async (studentId) => {
         const classCount = classMarks.length;
         let classTotal = 0;
         classMarks.forEach(m => {
-            classTotal += (Number(m.test1) || 0) * weightage.test1
-                + (Number(m.test2) || 0) * weightage.test2
-                + (Number(m.assignment) || 0) * weightage.assignment;
+            classTotal += (Number(m.test1) || 0) + (Number(m.test2) || 0) + (Number(m.assignment) || 0);
         });
         const classAvg = classCount > 0 ? parseFloat((classTotal / classCount).toFixed(1)) : 0;
 
-        // Student's weighted total
+        // Student's raw total
         const t1 = Number(sm.test1) || 0;
         const t2 = Number(sm.test2) || 0;
         const a = Number(sm.assignment) || 0;
-        const studentTotal = parseFloat(((t1 * weightage.test1) + (t2 * weightage.test2) + (a * weightage.assignment)).toFixed(1));
+        const studentTotal = Math.min(100, t1 + t2 + a);
 
-        // Raw percentage: (t1+t2+a) / (50+50+20) * 100
-        const MAX_RAW = 120;
-        const rawPct = parseFloat(((t1 + t2 + a) / MAX_RAW * 100).toFixed(1));
+        // Raw percentage: (t1+t2+a) / 100 * 100
+        const rawPct = studentTotal;
 
         result.push({
-            subjectId: subjectId.toString(),
+            subjectId: sm.subjectId, // Return the populated object
             subject: sm.subjectId.name || 'Unknown',
             test1: t1,
             test2: t2,
             assignment: a,
-            studentTotal,
+            total: studentTotal, // for ParentDashboard and new components
+            studentTotal,        // for legacy components (StudentPerformance, ComparativeChart)
             classAvg,
             rawPct,
             passed: studentTotal >= passMarks

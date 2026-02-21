@@ -54,19 +54,58 @@ const authenticateUser = async (email, password, req) => {
 };
 
 /**
+ * Resolves student identifiers (names or IDs) to User IDs.
+ * @param {string[]} identifiers
+ * @returns {Promise<string[]>}
+ */
+const resolveStudentIds = async (identifiers) => {
+    if (!identifiers || !Array.isArray(identifiers)) return [];
+
+    const results = [];
+    for (const id of identifiers) {
+        const trimmedId = id?.trim();
+        if (!trimmedId) continue;
+
+        // 1. Try if it's a valid ObjectId
+        if (trimmedId.match(/^[0-9a-fA-F]{24}$/)) {
+            const user = await User.findById(trimmedId);
+            if (user && user.role === 'student') {
+                results.push(user._id.toString());
+                continue;
+            }
+        }
+
+        // 2. Try to find by name (case-insensitive)
+        // Note: Using regex for exact match but case insensitive
+        const userByName = await User.findOne({
+            name: { $regex: new RegExp(`^${trimmedId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+            role: 'student'
+        });
+
+        if (userByName) {
+            results.push(userByName._id.toString());
+        }
+    }
+    return [...new Set(results)]; // Return unique IDs
+};
+
+/**
  * Register a new user and their associated profile.
  * @param {object} userData
  * @param {object} req - Express request object for logging
  * @returns {object} - Created user data
  */
 const createUser = async (userData, req) => {
-    const { name, email, password, role, batch, semester, subjectsAssigned, department, startDate, endDate } = userData;
+    const { name, email, password, role, batch, semester, subjectsAssigned, department, startDate, endDate, children } = userData;
 
     const userExists = await User.findOne({ email });
 
     if (userExists) {
         throw { status: 400, message: 'User already exists' };
     }
+
+    // Resolve student names/IDs to ObjectIds if role is parent
+    const resolvedChildren = role === 'parent' ? await resolveStudentIds(children) : [];
 
     // Create user with all common fields
     const user = await User.create({
@@ -78,7 +117,8 @@ const createUser = async (userData, req) => {
         // Save these to User model as well for easier filtering/reporting
         department,
         batch,
-        semester
+        semester,
+        children: resolvedChildren // For Parent users
     });
 
     try {
@@ -159,24 +199,44 @@ const getAllUsers = async () => {
             }
         },
         {
-            $addFields: {
-                department: {
-                    $cond: {
-                        if: { $eq: ['$role', 'student'] },
-                        then: { $ifNull: [{ $arrayElemAt: ['$studentProfile.department', 0] }, null] },
-                        else: {
-                            $cond: {
-                                if: { $eq: ['$role', 'teacher'] },
-                                then: { $ifNull: [{ $arrayElemAt: ['$teacherProfile.department', 0] }, null] },
-                                else: null
+            $lookup: {
+                from: 'users',
+                let: { childIds: '$children' },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $in: [
+                                    { $toString: '$_id' },
+                                    { $map: { input: { $ifNull: ['$$childIds', []] }, as: 'id', in: { $toString: '$$id' } } }
+                                ]
                             }
                         }
                     }
+                ],
+                as: 'childrenProfiles'
+            }
+        },
+        {
+            $addFields: {
+                department: {
+                    $ifNull: [
+                        '$department',
+                        { $arrayElemAt: ['$studentProfile.department', 0] },
+                        { $arrayElemAt: ['$teacherProfile.department', 0] }
+                    ]
                 },
                 batch: { $arrayElemAt: ['$studentProfile.batch', 0] },
                 semester: { $arrayElemAt: ['$studentProfile.semester', 0] },
                 startDate: { $arrayElemAt: ['$studentProfile.startDate', 0] },
-                endDate: { $arrayElemAt: ['$studentProfile.endDate', 0] }
+                endDate: { $arrayElemAt: ['$studentProfile.endDate', 0] },
+                childNames: {
+                    $map: {
+                        input: '$childrenProfiles',
+                        as: 'child',
+                        in: '$$child.name'
+                    }
+                }
             }
         },
         {
@@ -199,7 +259,7 @@ const getAllUsers = async () => {
  * @returns {object} - Updated user data
  */
 const updateUser = async (id, updateData, req) => {
-    const { name, email, password, department, batch, semester, startDate, endDate } = updateData;
+    const { name, email, password, department, batch, semester, startDate, endDate, children } = updateData;
     const user = await User.findById(id);
 
     if (!user) {
@@ -208,6 +268,13 @@ const updateUser = async (id, updateData, req) => {
 
     user.name = name || user.name;
     user.email = email || user.email;
+    if (department !== undefined) user.department = department;
+
+    // Resolve children if provided
+    if (children !== undefined && user.role === 'parent') {
+        user.children = await resolveStudentIds(children);
+    }
+
     if (password) {
         user.password = password;
     }

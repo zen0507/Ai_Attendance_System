@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, Users, BookOpen, Brain,
     BarChart2, Settings, X, LogOut, CheckSquare,
-    FileText, Sun, Moon, ChevronRight, Shield
+    FileText, Sun, Moon, ChevronRight, Shield, Lock
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -24,6 +24,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
             case 'admin':
                 return [
                     { path: '/admin/dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
+                    { path: '/change-password', icon: <Lock size={20} />, label: 'Security' },
                     { path: '/admin/settings', icon: <Settings size={20} />, label: 'Settings' },
                 ];
             case 'teacher':
@@ -31,6 +32,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
                     { path: '/teacher/dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
                     { path: '/teacher/attendance', icon: <CheckSquare size={20} />, label: 'Attendance' },
                     { path: '/teacher/marks', icon: <FileText size={20} />, label: 'Internal Marks' },
+                    { path: '/change-password', icon: <Lock size={20} />, label: 'Security' },
                     { path: '/teacher/settings', icon: <Settings size={20} />, label: 'Settings' },
                 ];
             case 'student':
@@ -38,6 +40,22 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
                     { path: '/student/dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
                     { path: '/student/attendance', icon: <CheckSquare size={20} />, label: 'My Attendance' },
                     { path: '/student/marks', icon: <BarChart2 size={20} />, label: 'Performance' },
+                    { path: '/change-password', icon: <Lock size={20} />, label: 'Security' },
+                ];
+            case 'hod':
+                return [
+                    { path: '/hod/dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
+                    { path: '/teacher/attendance', icon: <CheckSquare size={20} />, label: 'My Classes' }, // Reuse teacher route
+                    { path: '/hod/department', icon: <Users size={20} />, label: 'Department' }, // Future placeholder
+                    { path: '/hod/reports', icon: <BarChart2 size={20} />, label: 'Reports' },   // Future placeholder
+                    { path: '/change-password', icon: <Lock size={20} />, label: 'Security' },
+                ];
+            case 'parent':
+                return [
+                    { path: '/parent/dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
+                    { path: '/parent/attendance', icon: <CheckSquare size={20} />, label: 'Attendance' },
+                    { path: '/parent/performance', icon: <BarChart2 size={20} />, label: 'Performance' },
+                    { path: '/change-password', icon: <Lock size={20} />, label: 'Security' },
                 ];
             default:
                 return [];
@@ -80,11 +98,15 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
                             }`
                         }
                     >
-                        <div className="flex items-center gap-3.5">
-                            {link.icon}
-                            <span className="text-sm">{link.label}</span>
-                        </div>
-                        <ChevronRight size={16} className={`opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0 ${({ isActive }) => isActive ? 'text-white' : ''}`} />
+                        {({ isActive }) => (
+                            <>
+                                <div className="flex items-center gap-3.5">
+                                    {link.icon}
+                                    <span className="text-sm">{link.label}</span>
+                                </div>
+                                <ChevronRight size={16} className={`opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0 ${isActive ? 'text-white' : ''}`} />
+                            </>
+                        )}
                     </NavLink>
                 ))}
             </nav>

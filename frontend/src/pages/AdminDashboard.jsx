@@ -10,7 +10,7 @@ import API from '../api/axiosInstance';
 import ActivityFeed from '../components/dashboard/ActivityFeed';
 import SystemHealthChart from '../components/dashboard/SystemHealthChart';
 import {
-    Users, GraduationCap, BookOpen, UserPlus, Plus, Trash2, Edit2,
+    Users, GraduationCap, BookOpen, UserPlus, Plus, Trash2, Edit2, Check,
     Save, X, RefreshCw, Search, ChevronLeft, ChevronRight, AlertTriangle,
     BarChart2, Shield, Eye
 } from 'lucide-react';
@@ -399,12 +399,19 @@ const AdminDashboard = () => {
     // --- Overview Stats ---
     const [stats, setStats] = useState(null);
 
-    // --- Teachers Tab ---
+    // --- Teachers/HODs Tab ---
     const [teachers, setTeachers] = useState([]);
     const [teacherPage, setTeacherPage] = useState(1);
     const [teacherPages, setTeacherPages] = useState(1);
     const [teacherTotal, setTeacherTotal] = useState(0);
     const [teacherSearch, setTeacherSearch] = useState('');
+
+    // --- Parents Tab ---
+    const [parents, setParents] = useState([]);
+    const [parentPage, setParentPage] = useState(1);
+    const [parentPages, setParentPages] = useState(1);
+    const [parentTotal, setParentTotal] = useState(0);
+    const [parentSearch, setParentSearch] = useState('');
 
     // --- Students Tab ---
     const [students, setStudents] = useState([]);
@@ -427,7 +434,8 @@ const AdminDashboard = () => {
     const [editingUser, setEditingUser] = useState(null);
     const [editStudentData, setEditStudentData] = useState(null); // For modal editing
     const [editingSubject, setEditingSubject] = useState(null);
-    const [newTeacher, setNewTeacher] = useState({ name: '', email: '', password: '', department: '' });
+    const [newTeacher, setNewTeacher] = useState({ name: '', email: '', password: '', department: '', role: 'teacher' }); // Added role
+    const [newParent, setNewParent] = useState({ name: '', email: '', password: '', studentId: '', role: 'parent' });
     const [newStudent, setNewStudent] = useState({ name: '', email: '', password: '', batch: '', semester: 'S1', department: '', startDate: '', endDate: '' });
     const [newSubject, setNewSubject] = useState({ name: '', teacherId: '', department: '', startDate: '', semester: 'S1', batch: '' });
 
@@ -450,115 +458,72 @@ const AdminDashboard = () => {
     // ─── Department list (for dropdowns) ────────────────────
     const departments = allDepartments.map(d => d.name).sort();
 
-    // ─── FETCH: Overview Stats ──────────────────────────────
-    const fetchStats = useCallback(async () => {
+    // ─────────────────────────────────────────────────────────────
+    // FETCH DATA
+    // ─────────────────────────────────────────────────────────────
+    const fetchData = useCallback(async () => {
+        setLoading(true);
         try {
-            const data = await getAdminStats({ department: sortDepartment });
-            setStats(data);
+            // Fetch Dashboard Stats
+            const statsData = await getAdminStats({ department: sortDepartment });
+            setStats(statsData);
+
+            // Fetch Active Tab Data
+            setTabLoading(true);
+
+            if (activeTab === 'teachers') {
+                const staffData = await getAllUsers({ role: 'teacher,hod', department: sortDepartment !== 'All' ? sortDepartment : undefined, page: teacherPage, search: teacherSearch || undefined });
+                setTeachers(staffData.users);
+                setTeacherPages(staffData.pages);
+                setTeacherTotal(staffData.total);
+            } else if (activeTab === 'parents') {
+                const parentsData = await getAllUsers({ role: 'parent', page: parentPage, limit: 10, search: parentSearch || undefined });
+                setParents(parentsData.users);
+                setParentPages(parentsData.pages);
+                setParentTotal(parentsData.total);
+            } else if (activeTab === 'students') {
+                const studentsData = await getAllUsers({
+                    role: 'student',
+                    department: sortDepartment !== 'All' ? sortDepartment : undefined,
+                    page: studentPage,
+                    limit: 10,
+                    search: studentSearch || undefined,
+                    batch: studentBatchFilter || undefined,
+                    semester: studentSemFilter || undefined
+                });
+                setStudents(studentsData.users);
+                setStudentPages(studentsData.pages);
+                setStudentTotal(studentsData.total);
+            } else if (activeTab === 'subjects') {
+                const subjectsData = await getAllSubjects({
+                    department: sortDepartment !== 'All' ? sortDepartment : undefined,
+                    page: coursePage,
+                    limit: 10,
+                    search: courseSearch || undefined,
+                    semester: courseSemFilter || undefined
+                });
+                setCourses(subjectsData.subjects);
+                setCoursePages(subjectsData.pages);
+                setCourseTotal(subjectsData.total);
+            }
+            setTabLoading(false);
         } catch (err) {
-            console.error('Stats fetch failed', err);
-        }
-    }, [sortDepartment]);
-
-    // ─── FETCH: Teachers (paginated) ────────────────────────
-    const fetchTeachers = useCallback(async () => {
-        setTabLoading(true);
-        try {
-            const data = await getAllUsers({
-                role: 'teacher', page: teacherPage, limit: 10,
-                search: teacherSearch || undefined,
-                department: sortDepartment !== 'All' ? sortDepartment : undefined,
-            });
-            if (data.users) {
-                setTeachers(data.users);
-                setTeacherPages(data.pages);
-                setTeacherTotal(data.total);
-            } else {
-                // Backward-compat: non-paginated response
-                const t = (data || []).filter(u => u.role === 'teacher');
-                setTeachers(t);
-                setTeacherPages(1);
-                setTeacherTotal(t.length);
-            }
-        } catch (err) { console.error(err); }
-        finally { setTabLoading(false); }
-    }, [teacherPage, teacherSearch, sortDepartment]);
-
-    // ─── FETCH: Students (paginated) ────────────────────────
-    const fetchStudents = useCallback(async () => {
-        setTabLoading(true);
-        try {
-            const data = await getAllUsers({
-                role: 'student', page: studentPage, limit: 10,
-                search: studentSearch || undefined,
-                department: sortDepartment !== 'All' ? sortDepartment : undefined,
-                batch: studentBatchFilter || undefined,
-                semester: studentSemFilter || undefined,
-            });
-            if (data.users) {
-                setStudents(data.users);
-                setStudentPages(data.pages);
-                setStudentTotal(data.total);
-            } else {
-                const s = (data || []).filter(u => u.role === 'student');
-                setStudents(s);
-                setStudentPages(1);
-                setStudentTotal(s.length);
-            }
-        } catch (err) { console.error(err); }
-        finally { setTabLoading(false); }
-    }, [studentPage, studentSearch, sortDepartment, studentBatchFilter, studentSemFilter]);
-
-    // ─── FETCH: Courses (paginated) ─────────────────────────
-    const fetchCourses = useCallback(async () => {
-        setTabLoading(true);
-        try {
-            const data = await getAllSubjects({
-                page: coursePage, limit: 10,
-                search: courseSearch || undefined,
-                department: sortDepartment !== 'All' ? sortDepartment : undefined,
-                semester: courseSemFilter || undefined,
-            });
-            if (data.subjects) {
-                setCourses(data.subjects);
-                setCoursePages(data.pages);
-                setCourseTotal(data.total);
-            } else {
-                setCourses(data || []);
-                setCoursePages(1);
-                setCourseTotal((data || []).length);
-            }
-        } catch (err) { console.error(err); }
-        finally { setTabLoading(false); }
-    }, [coursePage, courseSearch, sortDepartment, courseSemFilter]);
-
-    // ─── FETCH: Departments ─────────────────────────────────
-    const fetchDepartments = useCallback(async () => {
-        try {
-            const d = await getDepartments();
-            setAllDepartments(d || []);
-        } catch (err) { console.error(err); }
-    }, []);
-
-    // ─── Initial Load ───────────────────────────────────────
-    useEffect(() => {
-        const init = async () => {
-            setLoading(true);
-            await Promise.all([fetchDepartments(), fetchStats()]);
+            console.error("Fetch Error:", err);
+            setMessage({ text: 'Failed to load data', type: 'error' });
+        } finally {
             setLoading(false);
-        };
-        init();
-    }, []); // eslint-disable-line
+            setTabLoading(false);
+        }
+    }, [activeTab, sortDepartment, teacherPage, teacherSearch, parentPage, parentSearch, studentPage, studentSearch, studentBatchFilter, studentSemFilter, coursePage, courseSearch, courseSemFilter, refreshKey]);
 
-    // Re-fetch stats when department filter changes
-    useEffect(() => { fetchStats(); }, [fetchStats]);
-
-    // Fetch tab data when switching tabs or filters change
     useEffect(() => {
-        if (activeTab === 'teachers') fetchTeachers();
-        if (activeTab === 'students') fetchStudents();
-        if (activeTab === 'subjects') fetchCourses();
-    }, [activeTab, fetchTeachers, fetchStudents, fetchCourses]);
+        fetchData();
+    }, [fetchData]);
+
+    // Initial Departments Fetch
+    useEffect(() => {
+        getDepartments().then(setAllDepartments).catch(console.error);
+    }, []);
 
     // ─── Debounced search handlers ──────────────────────────
     const handleSearchChange = (setter, pageSetter) => (e) => {
@@ -570,26 +535,35 @@ const AdminDashboard = () => {
     // ─── CRUD Handlers ──────────────────────────────────────
     const flashSuccess = (msg) => {
         setMessage({ text: msg, type: 'success' });
-        setRefreshKey(k => k + 1);
-        fetchStats();
-        fetchDepartments();
-        if (activeTab === 'teachers') fetchTeachers();
-        if (activeTab === 'students') fetchStudents();
-        if (activeTab === 'subjects') fetchCourses();
+        setRefreshKey(k => k + 1); // Triggers fetchData
+        getDepartments().then(setAllDepartments).catch(console.error);
     };
 
     const flashError = (error, defaultMsg) => {
         setMessage({ text: error.response?.data?.message || error.message || defaultMsg, type: 'error' });
     };
 
-    const handleCreateTeacher = async (e) => {
+    const handleCreateStaff = async (e) => {
         e.preventDefault();
         try {
-            await registerUser({ ...newTeacher, role: 'teacher' });
-            setNewTeacher({ name: '', email: '', password: '', department: '' });
+            await registerUser({ ...newTeacher }); // Role is now in state
+            setNewTeacher({ name: '', email: '', password: '', department: '', role: 'teacher' });
             document.getElementById('teacher_modal')?.close();
-            flashSuccess('Teacher created successfully');
-        } catch (error) { flashError(error, 'Error creating teacher'); }
+            flashSuccess(`${newTeacher.role === 'hod' ? 'HOD' : 'Teacher'} created successfully`);
+        } catch (error) { flashError(error, 'Error creating staff'); }
+    };
+
+    const handleCreateParent = async (e) => {
+        e.preventDefault();
+        try {
+            const { studentId, ...parentData } = newParent;
+            const payload = { ...parentData, role: 'parent', children: [studentId.trim()] };
+
+            await registerUser(payload);
+            setNewParent({ name: '', email: '', password: '', studentId: '', role: 'parent' });
+            document.getElementById('parent_modal')?.close();
+            flashSuccess('Parent created successfully');
+        } catch (error) { flashError(error, 'Error creating parent'); }
     };
 
     const handleCreateStudent = async (e) => {
@@ -636,7 +610,13 @@ const AdminDashboard = () => {
 
     const handleUpdateUser = async () => {
         try {
-            await updateUser(editingUser._id, editingUser);
+            const dataToSend = { ...editingUser };
+            if (dataToSend.children && Array.isArray(dataToSend.children)) {
+                dataToSend.children = dataToSend.children
+                    .map(s => s.trim())
+                    .filter(s => s !== '');
+            }
+            await updateUser(dataToSend._id, dataToSend);
             setEditingUser(null);
             flashSuccess('User updated successfully');
         } catch (error) { flashError(error, 'Error updating user'); }
@@ -724,7 +704,10 @@ const AdminDashboard = () => {
                             <UserPlus size={16} /> Add Student
                         </button>
                         <button className="btn btn-secondary btn-sm" onClick={() => document.getElementById('teacher_modal').showModal()}>
-                            <UserPlus size={16} /> Add Teacher
+                            <UserPlus size={16} /> Add Staff
+                        </button>
+                        <button className="btn btn-warning btn-sm text-white" onClick={() => document.getElementById('parent_modal').showModal()}>
+                            <UserPlus size={16} /> Add Parent
                         </button>
                         <button className="btn btn-accent btn-sm" onClick={() => document.getElementById('subject_modal').showModal()}>
                             <Plus size={16} /> Add Course
@@ -740,8 +723,9 @@ const AdminDashboard = () => {
             <div role="tablist" className="tabs tabs-boxed">
                 {[
                     { key: 'overview', label: 'Overview' },
-                    { key: 'teachers', label: 'Manage Teachers' },
+                    { key: 'teachers', label: 'Manage Staff' },
                     { key: 'students', label: 'Manage Students' },
+                    { key: 'parents', label: 'Manage Parents' },
                     { key: 'subjects', label: 'Manage Courses' },
                 ].map(t => (
                     <a key={t.key} role="tab" className={`tab ${activeTab === t.key ? 'tab-active' : ''}`}
@@ -751,7 +735,7 @@ const AdminDashboard = () => {
 
             {/* ═══ OVERVIEW TAB ════════════════════════════════ */}
             {activeTab === 'overview' && (
-                <>
+                <div className="space-y-6">
                     {/* Stats Cards */}
                     <div className="stats shadow w-full bg-base-100">
                         <div className="stat">
@@ -774,20 +758,22 @@ const AdminDashboard = () => {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div className="lg:col-span-2 space-y-6">
+                    {/* Responsive Grid: Stacks on mobile, 8/4 on LG (66/33%), 9/3 on XL (75/25%) */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start w-full">
+                        {/* LEFT COLUMN (Charts & Insights) */}
+                        <div className="lg:col-span-8 xl:col-span-9 space-y-6 w-full h-full">
                             {/* Academic Health Chart */}
                             <SystemHealthChart department={sortDepartment} refreshKey={refreshKey} />
 
                             {/* Relational Insights: Course Details */}
                             {stats?.courseInsights && stats.courseInsights.length > 0 && (
                                 <div className="card bg-base-100 shadow-xl">
-                                    <div className="card-body">
+                                    <div className="card-body p-4">
                                         <h3 className="card-title text-sm font-bold flex items-center gap-2 mb-3">
                                             <BarChart2 size={16} className="text-primary" /> Course Insights
                                         </h3>
                                         <div className="overflow-x-auto">
-                                            <table className="table table-xs table-zebra">
+                                            <table className="table table-xs table-zebra w-full">
                                                 <thead>
                                                     <tr>
                                                         <th>Course</th>
@@ -801,7 +787,7 @@ const AdminDashboard = () => {
                                                 <tbody>
                                                     {stats.courseInsights.map(c => (
                                                         <tr key={c._id}>
-                                                            <td className="font-medium">{c.name}</td>
+                                                            <td className="font-medium max-w-[150px] truncate" title={c.name}>{c.name}</td>
                                                             <td>{c.enrolledStudents}</td>
                                                             <td>{c.avgMarks}</td>
                                                             <td>
@@ -813,7 +799,7 @@ const AdminDashboard = () => {
                                                             <td>
                                                                 {c.teacher ? (
                                                                     <button
-                                                                        className="badge badge-outline badge-sm cursor-pointer hover:badge-primary transition-colors"
+                                                                        className="badge badge-outline badge-sm cursor-pointer hover:badge-primary transition-colors whitespace-nowrap"
                                                                         onClick={() => openTeacherProfile(c.teacher, c.teacher.workload)}
                                                                     >
                                                                         {c.teacher.name}
@@ -828,23 +814,103 @@ const AdminDashboard = () => {
                                     </div>
                                 </div>
                             )}
+
+                            {/* ─── NEW: AI Analytics & Insights Row ─── */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* AI Insights Panel */}
+                                <div className="h-full card bg-base-100 shadow-xl border border-primary/20">
+                                    <div className="card-body p-5">
+                                        <h3 className="card-title text-sm font-bold flex items-center gap-2 mb-2">
+                                            <div className="badge badge-primary badge-xs animate-pulse">AI</div>
+                                            System Insights
+                                        </h3>
+                                        <div className="space-y-3 text-sm">
+                                            {stats?.courseInsights?.length > 0 ? (
+                                                <>
+                                                    <div className="flex gap-3 items-start">
+                                                        <div className="mt-1 p-1 bg-success/10 rounded-full text-success"><BarChart2 size={12} /></div>
+                                                        <div>
+                                                            <p className="font-semibold text-base-content/70">Top Performer</p>
+                                                            <p>{(() => {
+                                                                const best = [...stats.courseInsights].sort((a, b) => b.passRate - a.passRate)[0];
+                                                                return `${best.name} (${best.passRate}% Pass Rate)`;
+                                                            })()}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-3 items-start">
+                                                        <div className="mt-1 p-1 bg-error/10 rounded-full text-error"><AlertTriangle size={12} /></div>
+                                                        <div>
+                                                            <p className="font-semibold text-base-content/70">Attention Needed</p>
+                                                            <p>{(() => {
+                                                                const worst = [...stats.courseInsights].sort((a, b) => a.attendanceRate - b.attendanceRate)[0];
+                                                                return `${worst.name} (${worst.attendanceRate}% Attendance)`;
+                                                            })()}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-3 items-start">
+                                                        <div className="mt-1 p-1 bg-warning/10 rounded-full text-warning"><Users size={12} /></div>
+                                                        <div>
+                                                            <p className="font-semibold text-base-content/70">Risk Assessment</p>
+                                                            <p>{stats.courseInsights.filter(c => c.attendanceRate < 75).length} Courses with Low Attendance</p>
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            ) : <span className="text-base-content/40 italic">Not enough data for insights.</span>}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Quick Actions */}
+                                <div className="h-full card bg-base-100 shadow-xl border border-base-200">
+                                    <div className="card-body p-5">
+                                        <h3 className="card-title text-sm font-bold mb-4">Quick Actions</h3>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button className="btn btn-sm btn-outline btn-primary h-auto py-3 flex flex-col gap-1 items-center"
+                                                onClick={() => document.getElementById('student_modal').showModal()}>
+                                                <UserPlus size={18} /> <span className="text-xs">Add Student</span>
+                                            </button>
+                                            <button className="btn btn-sm btn-outline btn-secondary h-auto py-3 flex flex-col gap-1 items-center"
+                                                onClick={() => document.getElementById('teacher_modal').showModal()}>
+                                                <UserPlus size={18} /> <span className="text-xs">Add Staff</span>
+                                            </button>
+                                            <button className="btn btn-sm btn-outline btn-accent h-auto py-3 flex flex-col gap-1 items-center"
+                                                onClick={() => document.getElementById('subject_modal').showModal()}>
+                                                <Plus size={18} /> <span className="text-xs">Add Course</span>
+                                            </button>
+                                            <button className="btn btn-sm btn-outline h-auto py-3 flex flex-col gap-1 items-center"
+                                                onClick={() => document.getElementById('parent_modal').showModal()}>
+                                                <Users size={18} /> <span className="text-xs">Add Parent</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div className="lg:col-span-1 space-y-6">
+
+                        {/* RIGHT COLUMN (Activity & Mgmt) */}
+                        <div className="lg:col-span-4 xl:col-span-3 space-y-6 w-full h-full">
+                            {/* Activity Feed */}
+                            <div className="card bg-base-100 shadow-xl border border-base-200 h-full max-h-[600px] flex flex-col">
+                                <div className="card-body p-0 flex-1 overflow-hidden">
+                                    <ActivityFeed />
+                                </div>
+                            </div>
+
                             {/* Department Management */}
                             <div className="card bg-base-100 shadow-xl border border-primary/10">
-                                <div className="card-body p-6">
-                                    <h3 className="card-title text-sm font-bold flex items-center gap-2 mb-4">
+                                <div className="card-body p-4">
+                                    <h3 className="card-title text-sm font-bold flex items-center gap-2 mb-3">
                                         <Shield size={16} className="text-primary" /> Manage Departments
                                     </h3>
-                                    <form onSubmit={handleCreateDepartment} className="flex gap-2 mb-4">
-                                        <input className="input input-sm input-bordered flex-1" placeholder="New Dept Name"
+                                    <form onSubmit={handleCreateDepartment} className="flex gap-2 mb-3">
+                                        <input className="input input-sm input-bordered flex-1" placeholder="New Dept"
                                             value={newDeptName} onChange={e => setNewDeptName(e.target.value)} required />
                                         <button className="btn btn-sm btn-primary btn-square"><Plus size={16} /></button>
                                     </form>
-                                    <div className="max-h-[200px] overflow-y-auto space-y-2">
+                                    <div className="max-h-[150px] overflow-y-auto space-y-1 custom-scrollbar pr-1">
                                         {allDepartments.map(dept => (
-                                            <div key={dept._id} className="flex justify-between items-center bg-base-200 p-2 rounded-lg group">
-                                                <span className="text-xs font-medium">{dept.name}</span>
+                                            <div key={dept._id} className="flex justify-between items-center bg-base-200/50 p-2 rounded hover:bg-base-200 transition-colors group">
+                                                <span className="text-xs font-medium truncate">{dept.name}</span>
                                                 <button className="btn btn-xs btn-error btn-ghost btn-square opacity-0 group-hover:opacity-100 transition-opacity"
                                                     onClick={() => requestDelete(dept._id, dept.name, 'department')}>
                                                     <Trash2 size={12} />
@@ -858,64 +924,63 @@ const AdminDashboard = () => {
                             {/* Teacher Workload Summary */}
                             {stats?.teacherWorkload && stats.teacherWorkload.length > 0 && (
                                 <div className="card bg-base-100 shadow-xl border border-secondary/10">
-                                    <div className="card-body p-6">
-                                        <h3 className="card-title text-sm font-bold flex items-center gap-2 mb-4">
-                                            <Users size={16} className="text-secondary" /> Teacher Workload
+                                    <div className="card-body p-4">
+                                        <h3 className="card-title text-sm font-bold flex items-center gap-2 mb-3">
+                                            <Users size={16} className="text-secondary" /> Workload
                                         </h3>
-                                        <div className="space-y-2">
+                                        <div className="space-y-2 max-h-[150px] overflow-y-auto custom-scrollbar pr-1">
                                             {stats.teacherWorkload.map((tw, i) => (
-                                                <div key={i} className="flex justify-between items-center text-sm">
-                                                    <span>{tw.name}</span>
-                                                    <span className="badge badge-ghost badge-sm">{tw.courseCount} courses</span>
+                                                <div key={i} className="flex justify-between items-center text-xs">
+                                                    <span className="truncate max-w-[70%]">{tw.name}</span>
+                                                    <span className="badge badge-ghost badge-sm">{tw.courseCount}</span>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
                                 </div>
                             )}
-
-                            <ActivityFeed />
                         </div>
                     </div>
-                </>
+                </div>
             )}
 
-            {/* ═══ TEACHERS TAB ════════════════════════════════ */}
+            {/* ═══ STAFF TAB (Teachers + HODs) ════════════════ */}
             {activeTab === 'teachers' && (
                 <div className="card bg-base-100 shadow-xl">
                     <div className="card-body">
-                        <div className="flex flex-wrap justify-between items-center mb-4 gap-3">
-                            <h2 className="card-title">Manage Teachers {sortDepartment !== 'All' && `(${sortDepartment})`}
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="card-title">Manage Staff {sortDepartment !== 'All' && `(${sortDepartment})`}
                                 <span className="badge badge-ghost badge-sm ml-2">{teacherTotal} total</span>
                             </h2>
-                            <div className="flex gap-2">
-                                <div className="relative">
-                                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40" />
-                                    <input className="input input-sm input-bordered pl-9 w-56" placeholder="Search by name/email..."
-                                        value={teacherSearch} onChange={handleSearchChange(setTeacherSearch, setTeacherPage)} />
-                                </div>
+                            <div className="relative">
+                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40" />
+                                <input className="input input-sm input-bordered pl-9 w-48" placeholder="Search staff..."
+                                    value={teacherSearch} onChange={handleSearchChange(setTeacherSearch, setTeacherPage)} />
                             </div>
                         </div>
-                        {tabLoading ? <TableSkeleton cols={4} /> : teachers.length > 0 ? (
+                        {tabLoading ? <TableSkeleton cols={5} /> : teachers.length > 0 ? (
                             <div className="overflow-x-auto">
                                 <table className="table table-zebra table-pin-rows">
-                                    <thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Actions</th></tr></thead>
+                                    <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Department</th><th>Actions</th></tr></thead>
                                     <tbody>
                                         {teachers.map(teacher => (
                                             <tr key={teacher._id}>
                                                 <td>{editingUser?._id === teacher._id ?
                                                     <input className="input input-sm input-bordered" value={editingUser.name} onChange={e => setEditingUser({ ...editingUser, name: e.target.value })} />
                                                     : teacher.name}</td>
+                                                <td>{/* Showing Role Badge */}{teacher.role === 'hod' ? <div className="badge badge-secondary badge-sm">HOD</div> : <div className="badge badge-ghost badge-sm">Teacher</div>}</td>
                                                 <td>{editingUser?._id === teacher._id ?
                                                     <input className="input input-sm input-bordered" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value })} />
                                                     : teacher.email}</td>
-                                                <td>{editingUser?._id === teacher._id ?
-                                                    <select className="select select-sm select-bordered w-full" value={editingUser.department || ''}
-                                                        onChange={e => setEditingUser({ ...editingUser, department: e.target.value })}>
-                                                        <option value="">Select Dept</option>
-                                                        {allDepartments.map(d => <option key={d._id} value={d.name}>{d.name}</option>)}
-                                                    </select>
-                                                    : teacher.department || '—'}</td>
+                                                <td>
+                                                    {editingUser?._id === teacher._id ? (
+                                                        <select className="select select-sm select-bordered w-full" value={editingUser.department || ''}
+                                                            onChange={e => setEditingUser({ ...editingUser, department: e.target.value })}>
+                                                            <option value="">Select Dept</option>
+                                                            {allDepartments.map(d => <option key={d._id} value={d.name}>{d.name}</option>)}
+                                                        </select>
+                                                    ) : teacher.department || '—'}
+                                                </td>
                                                 <td>
                                                     <div className="flex gap-2">
                                                         {editingUser?._id === teacher._id ? (<>
@@ -932,8 +997,79 @@ const AdminDashboard = () => {
                                     </tbody>
                                 </table>
                             </div>
-                        ) : <EmptyState message="No teachers found." />}
+                        ) : <EmptyState message="No staff found." />}
                         <Pagination page={teacherPage} pages={teacherPages} onPageChange={setTeacherPage} />
+                    </div>
+                </div>
+            )}
+
+            {/* ═══ PARENTS TAB ════════════════════════════════ */}
+            {activeTab === 'parents' && (
+                <div className="card bg-base-100 shadow-xl">
+                    <div className="card-body">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="card-title">Manage Parents
+                                <span className="badge badge-ghost badge-sm ml-2">{parentTotal} total</span>
+                            </h2>
+                            <div className="relative">
+                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40" />
+                                <input className="input input-sm input-bordered pl-9 w-48" placeholder="Search parents..."
+                                    value={parentSearch} onChange={handleSearchChange(setParentSearch, setParentPage)} />
+                            </div>
+                        </div>
+                        {tabLoading ? <TableSkeleton cols={4} /> : parents.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <table className="table table-zebra table-pin-rows">
+                                    <thead><tr><th>Name</th><th>Email</th><th>Students Linked</th><th>Actions</th></tr></thead>
+                                    <tbody>
+                                        {parents.map(parent => (
+                                            <tr key={parent._id}>
+                                                <td>{editingUser?._id === parent._id ?
+                                                    <input className="input input-sm input-bordered" value={editingUser.name} onChange={e => setEditingUser({ ...editingUser, name: e.target.value })} />
+                                                    : parent.name}</td>
+                                                <td>{editingUser?._id === parent._id ?
+                                                    <input className="input input-sm input-bordered" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value })} />
+                                                    : parent.email}</td>
+                                                <td>
+                                                    {editingUser?._id === parent._id ? (
+                                                        <input className="input input-sm input-bordered w-full"
+                                                            placeholder="Student Name or ID"
+                                                            value={Array.isArray(editingUser.children) ? editingUser.children.join(', ') : editingUser.children || ''}
+                                                            onChange={e => setEditingUser({ ...editingUser, children: e.target.value.split(',') })} />
+                                                    ) : (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {parent.childNames && parent.childNames.length > 0 ? (
+                                                                parent.childNames.map((childName, idx) => (
+                                                                    <span key={idx} className="badge badge-outline badge-xs">{childName}</span>
+                                                                ))
+                                                            ) : parent.children && parent.children.length > 0 && parent.children[0] ? (
+                                                                parent.children.map((childId, idx) => (
+                                                                    <span key={idx} className="badge badge-ghost badge-xs" title={childId}>ID: ...{childId.length > 4 ? childId.slice(-4) : childId}</span>
+                                                                ))
+                                                            ) : (
+                                                                <span className="text-base-content/40 italic text-xs">None</span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    <div className="flex gap-2">
+                                                        {editingUser?._id === parent._id ? (<>
+                                                            <button className="btn btn-sm btn-success btn-square" onClick={handleUpdateUser}><Check size={16} /></button>
+                                                            <button className="btn btn-sm btn-ghost btn-square" onClick={() => setEditingUser(null)}><X size={16} /></button>
+                                                        </>) : (<>
+                                                            <button className="btn btn-sm btn-primary btn-square" onClick={() => setEditingUser({ ...parent })}><Edit2 size={16} /></button>
+                                                            <button className="btn btn-sm btn-error btn-square" onClick={() => requestDelete(parent._id, parent.name, 'user')}><Trash2 size={16} /></button>
+                                                        </>)}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : <EmptyState message="No parents found." />}
+                        <Pagination page={parentPage} pages={parentPages} onPageChange={setParentPage} />
                     </div>
                 </div>
             )}
@@ -1089,8 +1225,21 @@ const AdminDashboard = () => {
             {/* Teacher Create Modal */}
             <dialog id="teacher_modal" className="modal">
                 <div className="modal-box">
-                    <h3 className="font-bold text-lg mb-4">Add New Teacher</h3>
-                    <form id="teacher-form" onSubmit={handleCreateTeacher} className="space-y-4">
+                    <h3 className="font-bold text-lg mb-4">Add New Staff</h3>
+                    <form id="teacher-form" onSubmit={handleCreateStaff} className="space-y-4">
+                        <div className="form-control">
+                            <label className="label cursor-pointer justify-start gap-4">
+                                <span className="label-text">Role:</span>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="role" className="radio radio-primary radio-sm" checked={newTeacher.role === 'teacher'} onChange={() => setNewTeacher({ ...newTeacher, role: 'teacher' })} />
+                                    <span className="label-text">Teacher</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="role" className="radio radio-secondary radio-sm" checked={newTeacher.role === 'hod'} onChange={() => setNewTeacher({ ...newTeacher, role: 'hod' })} />
+                                    <span className="label-text">HOD</span>
+                                </label>
+                            </label>
+                        </div>
                         <input className="input input-bordered w-full" placeholder="Name" value={newTeacher.name} onChange={e => setNewTeacher({ ...newTeacher, name: e.target.value })} required />
                         <input className="input input-bordered w-full" type="email" placeholder="Email" value={newTeacher.email} onChange={e => setNewTeacher({ ...newTeacher, email: e.target.value })} required />
                         <select className="select select-bordered w-full" value={newTeacher.department} onChange={e => setNewTeacher({ ...newTeacher, department: e.target.value })} required>
@@ -1101,7 +1250,27 @@ const AdminDashboard = () => {
                     </form>
                     <div className="modal-action">
                         <form method="dialog"><button className="btn">Cancel</button></form>
-                        <button type="submit" form="teacher-form" className="btn btn-primary">Create Teacher</button>
+                        <button type="submit" form="teacher-form" className="btn btn-primary">Create Staff</button>
+                    </div>
+                </div>
+                <form method="dialog" className="modal-backdrop"><button>close</button></form>
+            </dialog>
+
+            {/* Parent Create Modal */}
+            <dialog id="parent_modal" className="modal">
+                <div className="modal-box">
+                    <h3 className="font-bold text-lg mb-4">Add New Parent</h3>
+                    <form id="parent-form" onSubmit={handleCreateParent} className="space-y-4">
+                        <input className="input input-bordered w-full" placeholder="Parent Name" value={newParent.name} onChange={e => setNewParent({ ...newParent, name: e.target.value })} required />
+                        <input className="input input-bordered w-full" type="email" placeholder="Parent Email" value={newParent.email} onChange={e => setNewParent({ ...newParent, email: e.target.value })} required />
+                        <input className="input input-bordered w-full" type="password" placeholder="Password" value={newParent.password} onChange={e => setNewParent({ ...newParent, password: e.target.value })} required />
+                        <div className="divider text-xs">Link Student</div>
+                        <input className="input input-bordered w-full" placeholder="Student Name (Full Name) or ID" value={newParent.studentId} onChange={e => setNewParent({ ...newParent, studentId: e.target.value })} required />
+                        <p className="text-xs text-base-content/50 italic">Tip: Just type the student's full name. The system will find them automatically.</p>
+                    </form>
+                    <div className="modal-action">
+                        <form method="dialog"><button className="btn">Cancel</button></form>
+                        <button type="submit" form="parent-form" className="btn btn-primary">Create Parent</button>
                     </div>
                 </div>
                 <form method="dialog" className="modal-backdrop"><button>close</button></form>

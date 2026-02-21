@@ -16,7 +16,7 @@ import {
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-const MAX_RAW = 120; // 50 + 50 + 20
+const MAX_RAW = 100; // 30 + 30 + 40
 
 const StudentDashboard = () => {
     const { user } = useContext(AuthContext);
@@ -77,17 +77,15 @@ const StudentDashboard = () => {
         }]
     };
 
-    // --- Marks: compute raw % = (t1+t2+a)/120*100 ---
+    // --- Marks: Use backend-calculated total (100% scale) ---
     const enrichedMarks = marks.map(m => {
-        const t1 = Number(m.test1) || 0;
-        const t2 = Number(m.test2) || 0;
-        const a = Number(m.assignment) || 0;
-        const rawPct = parseFloat(((t1 + t2 + a) / MAX_RAW * 100).toFixed(1));
+        const total = m.total || ((Number(m.test1) || 0) + (Number(m.test2) || 0) + (Number(m.assignment) || 0));
+        const rawPct = parseFloat(total.toFixed(1));
         return {
             ...m,
             subject: m.subjectId?.name || 'Unknown Subject',
             rawPct,
-            passed: rawPct >= 50
+            passed: rawPct >= 40 // Standardized pass threshold (internal)
         };
     });
 
@@ -180,7 +178,7 @@ const StudentDashboard = () => {
                                     {overallMarksPct}%
                                 </div>
                                 <p className="text-xs opacity-40 mt-1">Avg across {enrichedMarks.length} subject{enrichedMarks.length !== 1 ? 's' : ''}</p>
-                                <p className="text-xs opacity-40">(T1+T2+Assign) / 120 × 100</p>
+                                <p className="text-xs opacity-40">(T1+T2+Assign) = 100% Scale</p>
                                 <div className="flex gap-2 mt-3">
                                     <span className="badge badge-success badge-sm">
                                         {enrichedMarks.filter(m => m.passed).length} Passed
@@ -221,10 +219,10 @@ const StudentDashboard = () => {
                                 <thead className="bg-base-200">
                                     <tr>
                                         <th>Subject</th>
-                                        <th className="text-center">Test 1 <span className="opacity-40 text-xs">/50</span></th>
-                                        <th className="text-center">Test 2 <span className="opacity-40 text-xs">/50</span></th>
-                                        <th className="text-center">Assignment <span className="opacity-40 text-xs">/20</span></th>
-                                        <th className="text-center">Total %</th>
+                                        <th className="text-center">Test 1 <span className="opacity-40 text-xs">/30</span></th>
+                                        <th className="text-center">Test 2 <span className="opacity-40 text-xs">/30</span></th>
+                                        <th className="text-center">Assignment <span className="opacity-40 text-xs">/40</span></th>
+                                        <th className="text-center">Total Score</th>
                                         <th className="text-center">Status</th>
                                     </tr>
                                 </thead>
@@ -263,9 +261,9 @@ const StudentDashboard = () => {
                                     <div key={i} className="p-4 border-b border-base-200">
                                         <h3 className="font-bold mb-2">{mark.subject}</h3>
                                         <div className="grid grid-cols-3 gap-2 text-sm mb-2">
-                                            <div><span className="opacity-50 text-xs">T1</span><br />{mark.test1}/50</div>
-                                            <div><span className="opacity-50 text-xs">T2</span><br />{mark.test2}/50</div>
-                                            <div><span className="opacity-50 text-xs">Assign</span><br />{mark.assignment}/20</div>
+                                            <div><span className="opacity-50 text-xs">T1</span><br />{mark.test1}/30</div>
+                                            <div><span className="opacity-50 text-xs">T2</span><br />{mark.test2}/30</div>
+                                            <div><span className="opacity-50 text-xs">Assign</span><br />{mark.assignment}/40</div>
                                         </div>
                                         <div className="flex items-center justify-between">
                                             <span className={`font-bold ${mark.rawPct >= 50 ? 'text-success' : 'text-error'}`}>

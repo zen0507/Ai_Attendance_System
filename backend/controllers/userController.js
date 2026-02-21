@@ -43,7 +43,15 @@ const getUsers = asyncHandler(async (req, res) => {
 
         // Build match stage
         const matchStage = {};
-        if (role) matchStage.role = role;
+        if (role) {
+            // Support comma-separated roles e.g. "teacher,hod"
+            const roles = role.split(',');
+            if (roles.length > 1) {
+                matchStage.role = { $in: roles };
+            } else {
+                matchStage.role = role;
+            }
+        }
         if (search) {
             matchStage.$or = [
                 { name: { $regex: search, $options: 'i' } },
@@ -70,24 +78,44 @@ const getUsers = asyncHandler(async (req, res) => {
                 }
             },
             {
-                $addFields: {
-                    department: {
-                        $cond: {
-                            if: { $eq: ['$role', 'student'] },
-                            then: { $ifNull: [{ $arrayElemAt: ['$studentProfile.department', 0] }, null] },
-                            else: {
-                                $cond: {
-                                    if: { $eq: ['$role', 'teacher'] },
-                                    then: { $ifNull: [{ $arrayElemAt: ['$teacherProfile.department', 0] }, null] },
-                                    else: null
+                $lookup: {
+                    from: 'users',
+                    let: { childIds: '$children' },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $in: [
+                                        { $toString: '$_id' },
+                                        { $map: { input: { $ifNull: ['$$childIds', []] }, as: 'id', in: { $toString: '$$id' } } }
+                                    ]
                                 }
                             }
                         }
+                    ],
+                    as: 'childrenProfiles'
+                }
+            },
+            {
+                $addFields: {
+                    department: {
+                        $ifNull: [
+                            '$department',
+                            { $arrayElemAt: ['$studentProfile.department', 0] },
+                            { $arrayElemAt: ['$teacherProfile.department', 0] }
+                        ]
                     },
                     batch: { $arrayElemAt: ['$studentProfile.batch', 0] },
                     semester: { $arrayElemAt: ['$studentProfile.semester', 0] },
                     startDate: { $arrayElemAt: ['$studentProfile.startDate', 0] },
-                    endDate: { $arrayElemAt: ['$studentProfile.endDate', 0] }
+                    endDate: { $arrayElemAt: ['$studentProfile.endDate', 0] },
+                    childNames: {
+                        $map: {
+                            input: '$childrenProfiles',
+                            as: 'child',
+                            in: '$$child.name'
+                        }
+                    }
                 }
             },
         ];
@@ -228,4 +256,38 @@ const deleteUser = asyncHandler(async (req, res) => {
     }
 });
 
-module.exports = { authUser, registerUser, getUsers, updateUser, deleteUser, getUserProfile, updateUserProfile };
+// @desc    Change user password
+// @route   PUT /api/users/change-password
+// @access  Private
+const changePassword = asyncHandler(async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+
+    // 1. Complexity Validation
+    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+        res.status(400);
+        throw new Error('Password must be at least 8 characters long and contain at least one letter and one number.');
+    }
+
+    const user = await User.findById(req.user._id);
+
+    if (user) {
+        // 2. Verify current password
+        const isMatch = await user.matchPassword(currentPassword);
+        if (!isMatch) {
+            res.status(401);
+            throw new Error('Current password is incorrect.');
+        }
+
+        // 3. Update and hash is handled by model middleware
+        user.password = newPassword;
+        await user.save();
+
+        responseHandler(res, 200, null, 'Password changed successfully. Please log in again.');
+    } else {
+        res.status(404);
+        throw new Error('User not found');
+    }
+});
+
+module.exports = { authUser, registerUser, getUsers, updateUser, deleteUser, getUserProfile, updateUserProfile, changePassword };

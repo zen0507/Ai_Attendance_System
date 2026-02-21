@@ -52,53 +52,77 @@ const predictNextValue = (dataPoints) => {
  * Uses dynamic thresholds from settings.
  * @param {Object} studentData - { attendancePct, internalMarks, attendanceTrend, marksTrend }
  * @param {Object} thresholds - { minAttendance, passMarks } from settings
- * @returns {Object} { riskScore, riskLevel, riskFactors, trends }
+ * @returns {Object} { riskScore, riskLevel, riskFactors, trends, engagementScore, engagementStatus }
  */
 const getRiskProfile = (studentData, thresholds = {}) => {
+    const { attendancePct, internalMarks, attendanceTrend, marksTrend } = studentData;
+
+    // RULE: If attendance data is missing, do NOT compute.
+    if (attendancePct === null) {
+        return {
+            riskScore: null,
+            riskLevel: 'N/A',
+            engagementScore: null,
+            engagementStatus: 'Insufficient data to compute engagement',
+            riskFactors: ["No attendance records found"],
+            trends: { attendance: 'N/A', performance: 'N/A' }
+        };
+    }
+
     const minAtt = safe(thresholds.minAttendance) || 75;
     const passMk = safe(thresholds.passMarks) || 20;
 
-    let riskScore = 0;
+    let safetyScore = 100;
     const factors = [];
-    const { attendancePct, internalMarks, attendanceTrend, marksTrend } = studentData;
     const att = safe(attendancePct);
     const marks = safe(internalMarks);
 
-    // 1. Attendance Risk
+    // 1. Attendance Penalty
     if (att < minAtt) {
-        riskScore += (minAtt - att) * 1.5;
+        safetyScore -= (minAtt - att) * 2;
         factors.push("Low Attendance");
     }
 
-    // 2. Marks Risk
+    // 2. Marks Penalty (Capped Test1+2(60) + Assign(40) = 100)
+    // Scale marks to 100 if they aren't already
     if (marks < passMk) {
-        riskScore += (passMk - marks) * 2;
+        safetyScore -= (passMk - marks) * 3;
         factors.push("Failing Marks");
     }
 
     // 3. Trend Analysis
     const attSlope = calculateSlope(attendanceTrend || []);
     const markSlope = calculateSlope(marksTrend || []);
-    if (attSlope < -0.5) { riskScore += 15; factors.push("Declining Attendance"); }
-    if (markSlope < -0.5) { riskScore += 15; factors.push("Declining Performance"); }
+    if (attSlope < -0.5) { safetyScore -= 10; factors.push("Declining Attendance"); }
+    if (markSlope < -0.5) { safetyScore -= 10; factors.push("Declining Performance"); }
 
-    // 4. Anomaly: High attendance but still failing
-    if (att > 85 && marks < passMk) {
-        riskScore += 10;
-        factors.push("Struggling despite presence");
-    }
+    const finalScore = Math.min(100, Math.max(0, safetyScore));
 
-    riskScore = Math.min(100, Math.max(0, riskScore));
-
+    // Dynamic Risk Level Mapping
     let riskLevel = 'Low';
-    if (riskScore >= 75) riskLevel = 'Critical';
-    else if (riskScore >= 50) riskLevel = 'High';
-    else if (riskScore >= 25) riskLevel = 'Medium';
+    if (finalScore < 60) riskLevel = 'High';
+    else if (finalScore < 80) riskLevel = 'Medium';
+
+    // --- 4. ENGAGEMENT CALCULATION (Weighted Formula) ---
+    // Formula: (Att * 0.5) + (Marks * 0.4) + (TrendStability * 0.1)
+    // Trend stability: 100 if stable/improving, 50 if declining
+    const trendStability = (attSlope < -0.5 || markSlope < -0.5) ? 50 : 100;
+
+    // Normalize Marks to 0-100 scale for consistency (it should already be 0-100)
+    const normalizedMarks = marks;
+
+    const engagementScore = (att * 0.5) + (normalizedMarks * 0.4) + (trendStability * 0.1);
+
+    let engagementStatus = 'Stable';
+    if (engagementScore > 85) engagementStatus = 'High';
+    else if (engagementScore < 60) engagementStatus = 'At Risk';
 
     return {
-        riskScore: parseFloat(riskScore.toFixed(1)),
+        riskScore: parseFloat(finalScore.toFixed(1)),
         riskLevel,
         riskFactors: factors,
+        engagementScore: parseFloat(engagementScore.toFixed(1)),
+        engagementStatus,
         trends: {
             attendance: attSlope > 0 ? 'Improving' : attSlope < 0 ? 'Declining' : 'Stable',
             performance: markSlope > 0 ? 'Improving' : markSlope < 0 ? 'Declining' : 'Stable'

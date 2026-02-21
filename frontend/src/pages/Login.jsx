@@ -223,7 +223,9 @@ const Login = () => {
             setIsSuccess(true);
             setTimeout(() => {
                 if (data.role === 'admin') navigate('/admin/dashboard');
+                else if (data.role === 'hod') navigate('/hod/dashboard');
                 else if (data.role === 'teacher') navigate('/teacher/dashboard');
+                else if (data.role === 'parent') navigate('/parent/dashboard');
                 else if (data.role === 'student') navigate('/student/dashboard');
             }, 800);
         } catch (err) {

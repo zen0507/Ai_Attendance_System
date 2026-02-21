@@ -15,9 +15,16 @@ const TeacherDashboard = lazy(() => import('./pages/TeacherDashboard'));
 const TeacherAttendance = lazy(() => import('./pages/TeacherAttendance'));
 const TeacherMarks = lazy(() => import('./pages/TeacherMarks'));
 const TeacherSettings = lazy(() => import('./pages/TeacherSettings'));
+const HODDashboard = lazy(() => import('./pages/HODDashboard')); // New
+const HODDepartment = lazy(() => import('./pages/HODDepartment')); // New
+const HODReports = lazy(() => import('./pages/HODReports')); // New
+const ParentDashboard = lazy(() => import('./pages/ParentDashboard')); // New
 const StudentDashboard = lazy(() => import('./pages/StudentDashboard'));
 const StudentAttendance = lazy(() => import('./pages/StudentAttendance'));
+const ParentAttendance = lazy(() => import('./pages/ParentAttendance'));
+const ParentPerformance = lazy(() => import('./pages/ParentPerformance'));
 const StudentPerformance = lazy(() => import('./pages/StudentPerformance'));
+const ChangePassword = lazy(() => import('./pages/ChangePassword'));
 
 function App() {
   return (
@@ -29,18 +36,45 @@ function App() {
               <Routes>
                 <Route path="/login" element={<Login />} />
 
+                {/* Common Protected Routes */}
+                <Route element={<ProtectedRoute allowedRoles={['admin', 'teacher', 'hod', 'student', 'parent']} />}>
+                  <Route element={<DashboardLayout />}>
+                    <Route path="/change-password" element={<ChangePassword />} />
+                  </Route>
+                </Route>
+
                 {/* Admin Routes */}
+                {/* ... existing admin routes ... */}
                 <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
                   <Route element={<DashboardLayout />}>
                     <Route path="/admin/dashboard" element={<AdminDashboard />} />
                     <Route path="/admin/settings" element={<AdminSettings />} />
-                    {/* Future routes: /admin/users, /admin/subjects */}
                     <Route path="/admin/*" element={<Navigate to="/admin/dashboard" replace />} />
                   </Route>
                 </Route>
 
-                {/* Teacher Routes */}
-                <Route element={<ProtectedRoute allowedRoles={['teacher']} />}>
+                {/* HOD Routes */}
+                <Route element={<ProtectedRoute allowedRoles={['hod']} />}>
+                  <Route element={<DashboardLayout />}>
+                    <Route path="/hod/dashboard" element={<HODDashboard />} />
+                    <Route path="/hod/department" element={<HODDepartment />} />
+                    <Route path="/hod/reports" element={<HODReports />} />
+                    <Route path="/hod/*" element={<Navigate to="/hod/dashboard" replace />} />
+                  </Route>
+                </Route>
+
+                {/* Parent Routes */}
+                <Route element={<ProtectedRoute allowedRoles={['parent']} />}>
+                  <Route element={<DashboardLayout />}>
+                    <Route path="/parent/dashboard" element={<ParentDashboard />} />
+                    <Route path="/parent/attendance" element={<ParentAttendance />} />
+                    <Route path="/parent/performance" element={<ParentPerformance />} />
+                    <Route path="/parent/*" element={<Navigate to="/parent/dashboard" replace />} />
+                  </Route>
+                </Route>
+
+                {/* Teacher Routes - Accessible by Teacher AND HOD */}
+                <Route element={<ProtectedRoute allowedRoles={['teacher', 'hod']} />}>
                   <Route element={<DashboardLayout />}>
                     <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
                     <Route path="/teacher/attendance" element={<TeacherAttendance />} />

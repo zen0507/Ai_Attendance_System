@@ -9,11 +9,13 @@ const registerSchema = Joi.object({
     name: Joi.string().required(),
     email: Joi.string().email().required(),
     password: Joi.string().min(6).required(),
-    role: Joi.string().valid('student', 'teacher', 'admin').required(),
+    role: Joi.string().valid('student', 'teacher', 'admin', 'hod', 'parent').required(),
     batch: Joi.string().allow('', null),
     semester: Joi.string().allow('', null),
     department: Joi.string().allow('', null),
     subjectsAssigned: Joi.array().items(Joi.string()).allow(null),
+    children: Joi.array().items(Joi.string()).allow(null), // For Parent
+    studentId: Joi.string().allow('', null), // Allowed but optional for parent creation payload
 });
 
 const marksSchema = Joi.object({

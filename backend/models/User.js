@@ -17,7 +17,7 @@ const userSchema = mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['admin', 'teacher', 'student'],
+        enum: ['admin', 'teacher', 'student', 'hod', 'parent'],
         default: 'student',
     },
     status: {
@@ -25,6 +25,11 @@ const userSchema = mongoose.Schema({
         enum: ['active', 'pending', 'rejected', 'inactive'],
         default: 'active',
     },
+    // For Parent users
+    children: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
     department: {
         type: String,
         required: false, // Optional for admin/others

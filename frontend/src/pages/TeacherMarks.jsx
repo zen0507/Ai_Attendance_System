@@ -8,10 +8,10 @@ import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Toolti
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-// Max marks per component (raw, before weighting)
-const MAX_TEST1 = 50;
-const MAX_TEST2 = 50;
-const MAX_ASSIGNMENT = 50;
+// Max marks per component (raw, strictly 100 total)
+const MAX_TEST1 = 30;
+const MAX_TEST2 = 30;
+const MAX_ASSIGNMENT = 40;
 
 const TeacherMarks = () => {
     const { user } = useContext(AuthContext);
@@ -30,8 +30,8 @@ const TeacherMarks = () => {
     // Weightage from settings
     const [weightage, setWeightage] = useState({ test1: 0.3, test2: 0.3, assignment: 0.4 });
 
-    // Computed max total (e.g., 50*0.3 + 50*0.3 + 50*0.4 = 50)
-    const maxTotal = (MAX_TEST1 * weightage.test1 + MAX_TEST2 * weightage.test2 + MAX_ASSIGNMENT * weightage.assignment).toFixed(1);
+    // Computed max total (30 + 30 + 40 = 100)
+    const maxTotal = 100;
 
     useEffect(() => {
         const fetchInitial = async () => {
@@ -100,12 +100,11 @@ const TeacherMarks = () => {
         const current = marksMap[studentId] || { test1: 0, test2: 0, assignment: 0 };
         const updated = { ...current, [field]: value === '' ? '' : numVal };
 
-        // Calculate weighted total
+        // Calculate raw total (system now uses 100-point scale)
         const t1 = parseFloat(updated.test1) || 0;
         const t2 = parseFloat(updated.test2) || 0;
         const a = parseFloat(updated.assignment) || 0;
-        const total = (t1 * weightage.test1) + (t2 * weightage.test2) + (a * weightage.assignment);
-        updated.total = parseFloat(total.toFixed(1));
+        updated.total = Math.min(100, t1 + t2 + a);
 
         setMarksMap(prev => ({ ...prev, [studentId]: updated }));
     };
@@ -148,9 +147,9 @@ const TeacherMarks = () => {
         }
     };
 
-    // Chart Data — Distribution uses 0-50 scale (10-point bins)
+    // Chart Data — Distribution uses 0-100 scale (20-point bins)
     const distributionData = {
-        labels: ['0-10', '10-20', '20-30', '30-40', '40-50'],
+        labels: ['0-20', '21-40', '41-60', '61-80', '81-100'],
         datasets: [{
             label: 'Students',
             data: [0, 0, 0, 0, 0],
@@ -159,10 +158,10 @@ const TeacherMarks = () => {
     };
     Object.values(marksMap).forEach(m => {
         const t = parseFloat(m.total || 0);
-        if (t < 10) distributionData.datasets[0].data[0]++;
-        else if (t < 20) distributionData.datasets[0].data[1]++;
-        else if (t < 30) distributionData.datasets[0].data[2]++;
-        else if (t < 40) distributionData.datasets[0].data[3]++;
+        if (t <= 20) distributionData.datasets[0].data[0]++;
+        else if (t <= 40) distributionData.datasets[0].data[1]++;
+        else if (t <= 60) distributionData.datasets[0].data[2]++;
+        else if (t <= 80) distributionData.datasets[0].data[3]++;
         else distributionData.datasets[0].data[4]++;
     });
 

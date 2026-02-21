@@ -93,7 +93,7 @@ const TeacherDashboard = () => {
                     <div className="stat-value text-secondary">{avgMarks.toFixed(1)}</div>
                     <div className="stat-desc">
                         {avgMarks === 0 ? 'No marks entered' :
-                            `Pass: ${settingsData.passMarks || 20} | Max: 50`}
+                            `Pass: ${settingsData.passMarks || 20} | Max: 100`}
                     </div>
                 </div>
 

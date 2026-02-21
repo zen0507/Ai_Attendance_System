@@ -99,14 +99,15 @@ const getTeacherStats = asyncHandler(async (req, res) => {
         totalPresent += att.hoursPresent;
         totalHours += att.hoursTotal;
 
-        // Marks — recalculate with LIVE weightage
+        // Marks — Use direct sum (30 + 30 + 40 = 100)
         const myMarks = allMarks.filter(m => m.studentId.toString() === profileId.toString());
         let sTotal = 0;
         myMarks.forEach(m => {
             const t1 = safe(m.test1); const t2 = safe(m.test2); const a = safe(m.assignment);
-            const recalcTotal = (t1 * weightage.test1) + (t2 * weightage.test2) + (a * weightage.assignment);
+            // REQUIREMENT: Total = Test1(30) + Test2(30) + Assignment(40) = 100
+            const rawTotal = t1 + t2 + a;
             t1Sum += t1; t2Sum += t2; assignSum += a;
-            totalSum += recalcTotal; sTotal += recalcTotal;
+            totalSum += rawTotal; sTotal += rawTotal;
             markEntryCount++;
         });
         const marksAvg = myMarks.length ? sTotal / myMarks.length : -1;
@@ -155,9 +156,9 @@ const getTeacherStats = asyncHandler(async (req, res) => {
     // --- Subject Performance ---
     const subPerf = {};
     allMarks.forEach(m => {
-        const wTotal = (safe(m.test1) * weightage.test1) + (safe(m.test2) * weightage.test2) + (safe(m.assignment) * weightage.assignment);
+        const rawTotal = safe(m.test1) + safe(m.test2) + safe(m.assignment);
         if (!subPerf[m.subjectId]) subPerf[m.subjectId] = { sum: 0, count: 0 };
-        subPerf[m.subjectId].sum += wTotal;
+        subPerf[m.subjectId].sum += rawTotal;
         subPerf[m.subjectId].count++;
     });
     const subjectPerformance = subjects.map(s => ({
@@ -267,12 +268,12 @@ const getStudentsBySubject = asyncHandler(async (req, res) => {
 
         // Marks
         const myMark = profileId ? marks.find(m => m.studentId.toString() === profileId.toString()) : null;
-        let recalcTotal = 0;
+        let markTotal = 0;
         if (myMark) {
-            recalcTotal = (safe(myMark.test1) * weightage.test1) + (safe(myMark.test2) * weightage.test2) + (safe(myMark.assignment) * weightage.assignment);
-            totalClassMarks += recalcTotal;
+            markTotal = safe(myMark.test1) + safe(myMark.test2) + safe(myMark.assignment);
+            totalClassMarks += markTotal;
             marksCount++;
-            if (recalcTotal >= passMarks) passed++;
+            if (markTotal >= passMarks) passed++;
         }
 
         // Risk classification
@@ -300,22 +301,22 @@ const getStudentsBySubject = asyncHandler(async (req, res) => {
                 test1: safe(myMark.test1),
                 test2: safe(myMark.test2),
                 assignment: safe(myMark.assignment),
-                total: parseFloat(recalcTotal.toFixed(1))
+                total: parseFloat((safe(myMark.test1) + safe(myMark.test2) + safe(myMark.assignment)).toFixed(1))
             } : null,
             riskLevel: risk,
             academicStatus: (myMark && recalcTotal < passMarks) ? 'Failing' : 'Passing'
         };
     });
 
-    // Distribution — 10-point bins on 0-50 scale
-    const dist = { '0-10': 0, '10-20': 0, '20-30': 0, '30-40': 0, '40-50': 0 };
+    // Distribution — 10-point bins on 0-100 scale (standardized)
+    const dist = { '0-20': 0, '20-40': 0, '40-60': 0, '60-80': 0, '80-100': 0 };
     marks.forEach(m => {
-        const t = (safe(m.test1) * weightage.test1) + (safe(m.test2) * weightage.test2) + (safe(m.assignment) * weightage.assignment);
-        if (t < 10) dist['0-10']++;
-        else if (t < 20) dist['10-20']++;
-        else if (t < 30) dist['20-30']++;
-        else if (t < 40) dist['30-40']++;
-        else dist['40-50']++;
+        const t = safe(m.test1) + safe(m.test2) + safe(m.assignment);
+        if (t < 20) dist['0-20']++;
+        else if (t < 40) dist['20-40']++;
+        else if (t < 60) dist['40-60']++;
+        else if (t < 80) dist['60-80']++;
+        else dist['80-100']++;
     });
 
     responseHandler(res, 200, {
@@ -460,7 +461,7 @@ const bulkUpdateMarks = asyncHandler(async (req, res) => {
         const t1 = safe(m.test1);
         const t2 = safe(m.test2);
         const ass = safe(m.assignment);
-        const total = (t1 * weightage.test1) + (t2 * weightage.test2) + (ass * weightage.assignment);
+        const total = t1 + t2 + ass;
 
         return Marks.findOneAndUpdate(
             { studentId: m.studentId, subjectId },
